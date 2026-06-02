@@ -36,11 +36,17 @@
     "path": "skills/csharp-defensive-programming/SKILL.md",
     "priority": "high",
     "triggers": [
+      "DDL change",
+      "stored procedure modification",
+      "adding a field",
+      "API signature change",
+      "defensive compatibility",
       "audit error handling",
       "review input validation",
       "design exception strategy",
       "empty catch block",
       "missing ArgumentNullException.ThrowIfNull",
+      "EF Core entity without concurrency token",
       "DDL change without migration",
       "logging-and-swallow pattern",
       "Result<T> vs Exception decision"
@@ -66,6 +72,10 @@
     {
       "name": "Code Complete (McConnell) ch.8",
       "note": "Defensive programming theory"
+    },
+    {
+      "name": "OWASP Top 10",
+      "note": "Secure coding best practices"
     }
   ]
 }

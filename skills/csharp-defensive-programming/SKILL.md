@@ -1,76 +1,99 @@
 ---
 name: csharp-defensive-programming
-description: "Use when auditing, designing, or implementing C#/.NET code for error handling, input validation, assertions, exception strategy, defensive compatibility (DDL/method signatures), or deciding between exception vs Result vs Try-pattern. Triggers on: empty catch blocks, missing ArgumentNullException.ThrowIfNull, public method without validation, EF Core entity without concurrency token, DDL change without migration script, logging-and-swallow patterns, production-only failure paths. Complements dotnet-best-practices (style/API) and csharp-async (concurrency) by adding the 'how to fail safely' layer."
+description: "Use when auditing, designing, or implementing C#/.NET code for error handling, input validation, assertions, exception strategy, defensive compatibility (DDL/method signatures), or deciding between exception vs Result vs Try-pattern. Triggers on: empty catch blocks, missing ArgumentNullException.ThrowIfNull, public method without validation, EF Core entity without concurrency token, DDL change without migration script, logging-and-swallow patterns, production-only failure paths. Complements dotnet-best-practices (style/API) and csharp-async (concurrency) by adding the \"how to fail safely\" layer."
 priority: high
 license: MIT
 ---
 
 # C# Defensive Programming Methodology
 
-A C#/.NET adaptation of the Code-Complete defensive model (McConnell ch.8), with API-boundary checks inspired by go-defensive, layered with the user's `防御性兼容` DDL contract and Karpathy-style behavior rules.
+A C#/.NET adaptation of the Code-Complete defensive model (McConnell ch.8), with API-boundary checks inspired by go-defensive, layered with the user's **Defensive Compatibility** DDL contract and Karpathy-style behavior rules.
 
-> **Tradeoff:** These guidelines bias toward **correctness over speed** for production systems. For prototypes/spikes (max 1 week), use judgment.
+> **Core Principle**: These guidelines bias toward **correctness over speed** for production systems. For prototypes/spikes (max 1 week), use judgment.
 
 ---
 
-## STOP — Never Skip (4 Invariants)
+## 🚨 Defensive Compatibility · Highest Priority · Mandatory
+
+**Trigger Scenarios**: Adding/modifying fields, method signatures, interfaces, stored procedures, or any DDL changes.
+
+**Hard Constraints**:
+1. **Backward Compatible**: New fields and new parameters must be optional with default values; breaking existing callers is forbidden.
+2. **Scripts Ship Together**: When modifying stored procedures/views/table structures, you must **synchronously check and prompt** for DDL/upgrade scripts in the same task; code and scripts change and ship together.
+3. **Stop First for Breaking Changes**: If compatibility must be broken (deleting fields, changing signature types, changing return structure), **stop immediately**, first prompt the user to save upgrade scripts and confirm before proceeding.
+4. **Silent Field Addition = Incident**: Any database field addition must audit callers and migration scripts; inconsistency reports an error directly, disallowing \"code added, script not updated\".
+
+**Pre-Commit Self-Check (Must Answer All)**:
+- Do existing callers/old DB versions still work?
+- Are upgrade scripts synchronized?
+- Do you need to prompt the user to backup change scripts?
+
+> **Source**: From real production incident lessons, **this is the highest priority rule**, overriding convenience.
+
+---
+
+## ⛔ STOP — Never Skip (5 Invariants)
 
 | # | Check | Why Critical in C# |
 |---|-------|---------------------|
-| 1 | **No executable code in `Debug.Assert`** | Code disappears in `Release` builds → silent dead code |
-| 2 | **No empty `catch` blocks (no `catch { }` or `catch (Exception) { }` without action)** | Swallowed exceptions compound into impossible-to-diagnose production failures |
-| 3 | **External input validated at trust boundary** | "Internal team API" is still external — anything crossing process/network/file boundary is hostile until proven otherwise |
-| 4 | **Defensive compatibility on DDL/signature changes** | New fields/params must be optional+defaulted; code & migration scripts ship together; breaking changes HALT and ask first |
+| 1 | **No empty catch blocks** | Swallowed exceptions compound into impossible-to-diagnose production failures |
+| 2 | **Public methods must validate all parameters at entry** | Input outside trust boundaries is never trusted, prevent NullReferenceException and other low-level errors |
+| 3 | **No side-effecting code in Debug.Assert** | Asserts disappear in Release builds → logic errors (not dead code, logic just doesn't execute) |
+| 4 | **External input validated at trust boundary** | \"Internal team API\" is still external — anything crossing process/network/file boundary is hostile until proven otherwise |
+| 5 | **EF entity changes must consider concurrency control** | No concurrency token causes silent lost-update bugs |
 
-> **Security exception:** Auth/authz/crypto/PII code is **never** exempt from #1-#4, regardless of other factors. When in doubt, validate.
+> **Security Exception**: Auth/authz/crypto/PII code is **never** exempt from the above, regardless of other factors. When in doubt, validate.
 
 ---
 
-## CRISIS TRIAGE (2 minutes, production down)
+## 🚨 Crisis Triage (2 minutes, production down)
 
-### Immediate (30s each)
-1. **Public method missing `ArgumentNullException.ThrowIfNull` / range check on entry?** Add it NOW.
-2. **Empty `catch` hiding root cause?** Add structured logging (ILogger), then trace to source.
-3. **`Debug.Assert` containing mutations, I/O, or `await`?** Extract to standalone statement + log.
+### Immediate Actions (30 seconds each)
+1. **Public method missing `ArgumentNullException.ThrowIfNull` / range check at entry?** Add it NOW.
+2. **Empty catch hiding root cause?** Add structured logging (ILogger), then trace to source.
+3. **DDL/SP out of sync with code?** Immediately rollback or synchronize scripts.
 
-### Before Deploying Fix (60s)
+### Before Deploying Fix (60 seconds)
 4. **Does fix match repo's existing error strategy** (exception vs `Result<T>` vs `Try*` pattern)? Grep first.
 5. **Is exception thrown at the right abstraction level?** Don't let `SqlException` leak from `GetEmployee()` — wrap as `EmployeeNotFoundException` (or your domain type).
 
-> **Why this works:** These 5 items catch ~80% of C# defensive bugs. Full checklist (24 items) is for non-emergency review.
+> **Why this works**: These 5 items catch ~80% of C# defensive bugs. Full checklist for non-emergency review.
 >
-> **Empty catch compounds.** A suppressed error in one layer cascades — your 2 AM debugging self will hate past-you.
+> **Empty catch compounds**: A suppressed error in one layer cascades — your 2 AM debugging self will hate past you.
 
 ---
 
 ## Key Definitions
 
-### External Input (treat as hostile)
-**Any data not provably controlled by the current code path:**
+### External Input (Treat as Hostile)
+**Any data not provably controlled by the current code path**:
 - HTTP request body / query / headers / route values
 - Files (config, uploads, data files)
 - Network (downstream APIs, message queues, gRPC)
 - Environment variables, `IConfiguration` values
 - Database results (even from your own DB — schema drift, manual fixes)
-- Data from **any** other service, including internal ones
+- Data from **any** other service, including internal services
 
-**Rule of thumb:** If it crosses a process, network, or trust boundary — validate.
+**Rule of thumb**: If it crosses a process, network, or trust boundary — validate it.
 
-### Assertion in C# (`Debug.Assert`)
-Code that checks itself at runtime. **Use only for conditions that should NEVER occur** (programmer bugs, violated invariants). Disabled in `Release` — anything you put inside must be safe to vanish.
+### Assertions in C# (Debug.Assert)
+Code that checks itself at runtime. **Only use for conditions that should NEVER happen** (programmer bugs, violated invariants). **Disabled in Release** — anything you put inside must be safe to disappear.
+
+**Key Points**:
+- Assert is a **development aid**, not production validation
+- **Never put side-effecting code in Assert** (like `ProcessPayment(order)` or state-modifying functions)
+- Correct usage: pure condition checks like `Debug.Assert(order.Lines.Count > 0, \"Order must have at least one line\")`
 
 ```csharp
-// GOOD: pure check, no side effects
+// ✅ GOOD: pure check, no side effects
 Debug.Assert(order.Lines.Count > 0, "Order must have at least one line");
+
+// ❌ BAD: side-effecting code won't execute in Release!
+Debug.Assert(ProcessPayment(order), "Payment must succeed");
 ```
 
-```csharp
-// BAD: side-effecting code inside assertion
-Debug.Assert(ProcessPayment(order), "Payment must succeed"); // Payment skipped in Release!
-```
-
-### Barricade (防波堤)
-A damage-containment boundary. Public surface of a class/module validates everything that enters; inside the barricade, code can trust the data and use cheaper assertions for internal invariants.
+### Barricade
+A damage containment boundary. Public surface of a class/module validates everything that enters; inside the barricade, code can trust the data and use cheaper assertions for internal invariants.
 
 ```csharp
 public sealed class OrderService(IOrderRepository repo, ILogger<OrderService> log)
@@ -89,11 +112,11 @@ public sealed class OrderService(IOrderRepository repo, ILogger<OrderService> lo
 }
 ```
 
-> **Limitation:** Barricades reduce redundant validation but do NOT replace defense-in-depth for security-critical paths (auth, crypto, PII). **Bugs in barricade validation happen** — keep critical checks layered.
+> **Limitation**: Barricades reduce redundant validation but do NOT replace defense-in-depth for security-critical paths (auth, crypto, PII). **Bugs in barricade validation happen** — keep critical checks layered.
 
 ### Correctness vs Robustness
-- **Correctness:** Never return an inaccurate result; no result > wrong result. Default for: medical/finance/audit/payment/inventory systems.
-- **Robustness:** Keep software running even if results are sometimes imperfect. Default for: consumer UIs, internal tools, exploratory dashboards.
+- **Correctness**: Never return an inaccurate result; no result > wrong result. Default for: medical/finance/audit/payment/inventory systems.
+- **Robustness**: Keep software running even if results are sometimes imperfect. Default for: consumer UIs, internal tools, exploratory dashboards.
 
 | Domain | Lean Toward | Key Question |
 |--------|-------------|--------------|
@@ -112,23 +135,23 @@ In C#, encode with: `ArgumentNullException.ThrowIfNull`, `ArgumentOutOfRangeExce
 
 ---
 
-## C# Boundary Checklist (in priority order)
+## C# Boundary Checklist (Priority Order)
 
 When hardening an API boundary (public method, controller endpoint, message handler, DI-injected service entry):
 
 ```
 Reviewing an API boundary?
-├─ 1. Argument validation  → ArgumentNullException.ThrowIfNull / ThrowIfNullOrWhiteSpace / range checks
-├─ 2. Error strategy       → Match repo's pattern (exception vs Result<T> vs TryXxx)
-├─ 3. Async safety         → async Task (not async void), CancellationToken threaded, no .Result/.Wait()
-├─ 4. Resource cleanup     → using / await using / IAsyncDisposable; finally for legacy try/catch
-├─ 5. Output safety        → Don't return mutable internal collections (return IReadOnlyList<T>, immutable record)
-├─ 6. Time correctness     → DateTimeOffset (not DateTime) for persisted/computed times; TimeSpan for durations
-├─ 7. Enum safety          → Default to 0 = invalid sentinel; or use [FlagsEnum] / SmartEnum
-├─ 8. Crypto safety        → RandomNumberGenerator (not Random); never use Random for tokens/keys/nonces
-├─ 9. NRT discipline       → #nullable enable; annotate generics; no silent null returns
-├─ 10. Logging discipline  → Structured logging (ILogger<T>); no PII; correct log level
-└─ 11. Concurrency         → Immutable types by default; lock/Interlocked for shared state; SemaphoreSlim for async
+├─ 1. Argument validation → ArgumentNullException.ThrowIfNull / ThrowIfNullOrWhiteSpace / range checks
+├─ 2. Error strategy → Match repo's pattern (exception vs Result<T> vs TryXxx)
+├─ 3. Async safety → async Task (not async void), CancellationToken threaded, no .Result/.Wait()
+├─ 4. Resource cleanup → using / await using / IAsyncDisposable; finally for legacy try/catch
+├─ 5. Output safety → Don't return mutable internal collections (return IReadOnlyList<T>, immutable record)
+├─ 6. Time correctness → DateTimeOffset (not DateTime) for persisted/computed times; TimeSpan for durations
+├─ 7. Enum safety → Default 0 = invalid sentinel; or use [FlagsEnum] / SmartEnum
+├─ 8. Crypto safety → RandomNumberGenerator (not Random); never use Random for tokens/keys/nonces
+├─ 9. NRT discipline → #nullable enable; annotate generics; no silent null returns
+├─ 10. Logging discipline → Structured logging (ILogger<T>); no PII; correct log level
+└─ 11. Concurrency → Immutable types by default; lock/Interlocked for shared state; SemaphoreSlim for async
 ```
 
 ---
@@ -159,16 +182,16 @@ Handling a potentially bad condition in C#?
 |----------|-------------|----------|
 | **Exceptions** (default in .NET) | Truly exceptional, deep call stacks, async-heavy | Performance cost on hot paths; can leak across layers if not wrapped |
 | **`Result<T>` / `OneOf<T, TError>`** | Domain expected outcomes (login, validation, business rules) | Explicit at call site; forces handling; less idiomatic in BCL |
-| **`TryXxx` (bool, out T)** | Cheap, frequent, performance-sensitive parsing (int.TryParse style) | Hides the error reason; only works for one error class |
+| **`TryXxx` (bool, out T)** | Cheap, frequent, performance-sensitive parsing (int.TryParse style) | Hides error reason; only works for one error class |
 | **Exception + Polly** | External service calls, transient failures | Adds resilience policy; can mask bugs if retries are too broad |
 
-> **Rule:** Pick ONE strategy per module/layer. Mixing "Result here, exception there" in the same codebase is the #1 source of defensive confusion. **Document the choice in `CONTEXT.md` / `docs/adr/`.**
+> **Rule**: Pick ONE strategy per module/layer. Mixing "Result here, exception there" in the same codebase is the #1 source of defensive confusion. **Document the choice in `CONTEXT.md` / `docs/adr/`.**
 
 ---
 
-## The C# Defensive Patterns (Checklist)
+## C# Defensive Patterns (Checklist)
 
-### 1. Argument Validation (Cheap, High-Value)
+### 1. Argument Validation (Cheap, High Value)
 
 ```csharp
 // .NET 6+ idiomatic
@@ -183,17 +206,17 @@ public void Process(string id, int count, Stream stream, CancellationToken ct = 
 }
 ```
 
-> **Note:** `ArgumentNullException.ThrowIfNull` is preferred over `if (x == null) throw new ArgumentNullException(nameof(x));` — shorter, no risk of inverted condition, and analyzable.
+> **Note**: `ArgumentNullException.ThrowIfNull` is preferred over `if (x == null) throw new ArgumentNullException(nameof(x));` — shorter, no risk of inverted condition, and analyzable.
 
 ### 2. Defensive Disposal (Resource Cleanup)
 
 ```csharp
-// GOOD: scope-based
+// ✅ GOOD: scope-based
 await using var stream = await httpClient.GetStreamAsync(url, ct);
 await using var reader = new StreamReader(stream);
 // reader & stream disposed even on exception
 
-// GOOD: explicit finally for legacy code
+// ✅ GOOD: explicit finally for legacy code
 IDbConnection conn;
 try
 {
@@ -205,7 +228,7 @@ finally
     conn?.Dispose();
 }
 
-// BAD: resource leak on exception
+// ❌ BAD: resource leak on exception
 var stream = OpenStream();
 DoWork(stream);
 stream.Close(); // never reached if DoWork throws
@@ -214,10 +237,10 @@ stream.Close(); // never reached if DoWork throws
 ### 3. Async-Specific Defensive Rules
 
 ```csharp
-// BAD: unhandled Task continuation crashes process silently
+// ❌ BAD: unhandled Task continuation crashes process silently
 public Task ProcessAsync() => DoWorkAsync(); // exceptions in unobserved task
 
-// GOOD: explicit error path
+// ✅ GOOD: explicit error path
 public async Task ProcessAsync(CancellationToken ct)
 {
     try
@@ -226,7 +249,7 @@ public async Task ProcessAsync(CancellationToken ct)
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
-        throw; // expected, do not log as error
+        throw; // expected, don't log as error
     }
     catch (Exception ex)
     {
@@ -236,21 +259,21 @@ public async Task ProcessAsync(CancellationToken ct)
 }
 ```
 
-> **Additional rules (see `csharp-async` skill for full guidance):**
+> **Additional rules (see `csharp-async` skill for full guidance)**:
 > - Never `.Result` / `.Wait()` (deadlock risk)
-> - `async void` ONLY for event handlers
+> - `async void` **only** for event handlers
 > - Thread `CancellationToken` through every layer
 
 ### 4. Empty Catch — The Silent Killer
 
 ```csharp
-// BAD: silent failure
+// ❌ BAD: silent failure
 try { await NotifyAsync(evt, ct); } catch { }
 
-// BAD: log-and-swallow without rethrow or escalation
+// ❌ BAD: log-and-swallow without rethrow or escalation
 try { await NotifyAsync(evt, ct); } catch (Exception ex) { logger.LogWarning(ex, ""); }
 
-// GOOD: act on the exception
+// ✅ GOOD: act on the exception
 try
 {
     await NotifyAsync(evt, ct);
@@ -262,7 +285,7 @@ catch (HttpRequestException ex) when (IsTransient(ex))
 }
 ```
 
-> **Rule:** Every `catch` must do one of: **log + rethrow**, **wrap + throw new**, **retry**, or **record and continue with a documented business reason**. "Catch and ignore" is forbidden unless there's a comment explaining the imperative (e.g., "fire-and-forget notification, failure is acceptable").
+> **Rule**: Every `catch` must do one of: **log + rethrow**, **wrap + throw new**, **retry**, or **record and continue with documented business reason**. "Catch and ignore" is forbidden unless there's a comment explaining the imperative (e.g., "fire-and-forget notification, failure is acceptable").
 
 ### 5. NRT + `IValidatableObject` (DDD DTO Validation)
 
@@ -274,14 +297,14 @@ public sealed record CreateOrderRequest(
     public IEnumerable<ValidationResult> Validate(ValidationContext _)
     {
         if (string.IsNullOrWhiteSpace(CustomerId))
-            yield return new ValidationResult("CustomerId required", new[] { nameof(CustomerId) });
+            yield return new ValidationResult("CustomerId is required", new[] { nameof(CustomerId) });
         if (Lines is null || Lines.Count == 0)
-            yield return new ValidationResult("At least one line required", new[] { nameof(Lines) });
+            yield return new ValidationResult("At least one line is required", new[] { nameof(Lines) });
     }
 }
 ```
 
-### 6. Concurrency Tokens on EF Entities (DbUpdateConcurrencyException source)
+### 6. Concurrency Tokens on EF Entities (DbUpdateConcurrencyException Source)
 
 ```csharp
 // Mark every aggregate root you mutate
@@ -293,7 +316,7 @@ public class Order
 }
 ```
 
-> **Why:** Without a concurrency token, silent lost-update bugs occur. Catch `DbUpdateConcurrencyException` at the service boundary and return a domain-level conflict result.
+> **Why**: Without a concurrency token, silent lost-update bugs occur. Catch `DbUpdateConcurrencyException` at the service boundary and return a domain-level conflict result.
 
 ### 7. Immutability as Defense (Records + `with`)
 
@@ -310,11 +333,11 @@ public sealed record Money(decimal Amount, string Currency)
 }
 ```
 
-> **Why:** Reduces defensive-mutation surface. If you can't mutate shared state, you don't need to defend against mutation races.
+> **Why**: Reduces defensive-mutation surface. If you can't mutate shared state, you don't need to defend against mutation races.
 
 ---
 
-## Pattern Reuse Gate (BEFORE writing new error handling)
+## Pattern Reuse Gate (Before writing new error handling)
 
 **Search the codebase first. Inconsistency is the worst defensive code smell.**
 
@@ -326,41 +349,20 @@ public sealed record Money(decimal Amount, string Currency)
 | Logging patterns (structured vs string interpolation) | Match the existing convention |
 | `IValidatableObject` / FluentValidation usage | Don't add a parallel validation system |
 
-**If pattern found:** Follow it. Consistency beats cleverness.
-**If no pattern found:** You're establishing one. Document the decision in `docs/adr/`. Get review.
-
----
-
-## Defensive Compatibility · DDL/Migration/Contract (USER MANDATE)
-
-**Trigger:** Adding/modifying a field, method signature, interface, stored procedure, or any DDL change.
-
-### Hard Constraints
-
-1. **Backward compatible by default.** New fields, new parameters → optional + default value. Never break existing callers.
-2. **Code & scripts ship together.** Changing stored proc / view / table? **Synchronously check and update** the migration / DDL script in the same task. Mismatched code and script = incident.
-3. **Breaking change → HALT and ask.** Deleting a field, changing a return type, changing a signature incompatibly? **Stop immediately**, surface the breaking change, ask the user to confirm the upgrade path before proceeding.
-4. **Silent field additions = incident.** Any DB field addition MUST be audited for callers + migration script. Inconsistency → fail loud, never silently.
-
-### Pre-commit Self-Check (answer all 3)
-
-- [ ] Do existing callers / older DB versions still work?
-- [ ] Is the migration / upgrade script in the same commit?
-- [ ] Have I surfaced the script path to the user for backup?
-
-> **Origin:** `防御性兼容 · Defensive Compatibility` in workspace `CLAUDE.md`. This is a **highest-priority** rule, overriding convenience.
+**If pattern found**: Follow it. Consistency beats cleverness.
+**If no pattern found**: You're establishing one. Document the decision in `docs/adr/`. Get review.
 
 ---
 
 ## Async & Concurrent Defensive Patterns
 
-### `Task.WhenAll` / `Task.WhenAllSettled` analog
+### `Task.WhenAll` / `Task.WhenAllSettled` Analog
 
 ```csharp
-// BAD: first failure loses context of others
+// ❌ BAD: first failure loses context of others
 await Task.WhenAll(jobs);
 
-// GOOD: aggregate failures, decide policy
+// ✅ GOOD: aggregate failures, decide policy
 var results = await Task.WhenAll(jobs.Select(j => j.RunSafelyAsync(ct)));
 var failures = results.Where(r => !r.Success).ToList();
 if (failures.Count > 0)
@@ -370,12 +372,12 @@ if (failures.Count > 0)
 }
 ```
 
-### Cancellation discipline
+### Cancellation Discipline
 - Every public async method takes `CancellationToken ct = default`.
 - Check `ct.ThrowIfCancellationRequested()` in long loops.
 - `OperationCanceledException` is **expected**, log at `Debug` (not `Error`) and rethrow.
 
-### Channels for producer/consumer
+### Channels for Producer/Consumer
 - `BoundedChannel` with `FullMode = Wait` or `DropOldest` (not unbounded — memory exhaustion defense).
 - See `csharp-concurrency-patterns` skill for deeper guidance.
 
@@ -383,7 +385,7 @@ if (failures.Count > 0)
 
 ## Offensive Programming (Make Failures Painful in Dev)
 
-> **Paradoxon:** During development, make errors obvious and obnoxious. During production, make them quiet with structured recovery.
+> **Paradox**: During development, make errors obvious and obnoxious. During production, make them quiet with structured recovery.
 
 | Technique | C# Example |
 |-----------|------------|
@@ -403,7 +405,7 @@ if (failures.Count > 0)
 | `if (DEBUG) LogVerbose(...)` | **REMOVE** or gate by `IsEnabled(LogLevel.Trace)` | Don't leak verbose noise to prod |
 | Hard crash on bad data | **WRAP** in try/catch with telemetry | Users need to save work |
 | Helpful dev exception messages | **SANITIZE** for prod (no stack traces, no internal paths) | Don't help attackers |
-| `Console.WriteLine` for debug | **REPLACE** with `ILogger<T>` from day 1 | Standardized structured logging |
+| `Console.WriteLine` for debugging | **REPLACE** with `ILogger<T>` from day 1 | Standardized structured logging |
 | Throw on first validation error | **OK** in API controllers; **collect-all** in form/DTO validation | Better UX in UI |
 
 ---
@@ -415,23 +417,40 @@ if (failures.Count > 0)
 - **Test code / test doubles** — intentionally violate production patterns (e.g., throwing in test setup is fine).
 - **Performance-critical inner loops** — only if profiling proves defensive checks cost >5%; otherwise keep them.
 
-> **But:** if the code touches auth, payments, crypto, PII, medical, or compliance — these exceptions do not apply. **Always validate.**
+> **But**: If the code touches auth, payments, crypto, PII, medical, or compliance — these exceptions do not apply. **Always validate.**
 
 ---
 
-## Crisis Invariants — Quick Card (print and pin)
+## Industry Defensive Programming Best Practices Top 10 (Summary)
+
+Combining OWASP, Microsoft documentation, and industry consensus, the core principles of defensive programming include:
+
+1. **Input Validation Always Comes First** — everything outside trust boundaries is hostile (OWASP Top 10)
+2. **Null Checks and Boundary Checks** — prevent NullReferenceException and IndexOutOfRangeException
+3. **Exception Handling Strategy** — no empty catch, every exception has handling or logging
+4. **Defensive Compatibility** — DDL/API changes must be backward compatible, scripts ship with code (from your incident lessons)
+5. **Parameter Validation** — public method entry must validate all inputs (.NET 6+ ThrowIfNull)
+6. **Resource Cleanup** — using/await using pattern, prevent resource leaks
+7. **Concurrency Safety** — immutability, locks, concurrency tokens
+8. **Secure Coding** — avoid outdated algorithms, parameterized queries, output encoding
+9. **Logging and Monitoring** — structured logging, no PII in logs
+10. **Testing and Assertions** — unit tests cover boundary cases, Debug.Assert for development invariants
+
+---
+
+## Crisis Invariants — Quick Card (Print and Pin)
 
 ```
-[ ] No code in Debug.Assert body
+[ ] Defensive compatibility check: DDL/API changes have scripts? Backward compatible?
 [ ] No empty catch (log+rethrow, wrap+throw, retry, or documented ignore)
 [ ] Public method validates all args (ThrowIfNull / ThrowIfNullOrEmpty / range)
 [ ] async Task not async void; CancellationToken threaded
 [ ] using / await using for disposables; finally only for legacy
 [ ] Result<T> vs Exception strategy matches module convention
 [ ] NRT enabled; no silent null returns
-[ ] DDL/contract change: backward compatible + migration script + HALT on breaking
 [ ] EF aggregate roots have concurrency token
 [ ] Structured logging; no PII in logs
+[ ] No side-effecting code in Debug.Assert
 ```
 
 ---
@@ -441,11 +460,11 @@ if (failures.Count > 0)
 | Claim | Source | Application |
 |-------|--------|-------------|
 | Barricades + assertions split external/internal | McConnell, *Code Complete* ch.8 | Trust boundary design |
-| 8-step API boundary order | go-defensive (cxuu) | Adapted to C# idioms |
-| "Garbage in, garbage out" is obsolete | McConnell p.188 | Validate external input always |
-| Defensive compatibility = highest-priority DDL rule | User `CLAUDE.md` | Mandatory, overrides convenience |
+| Defensive Compatibility = highest priority | Real production incident lessons | Mandatory, overrides convenience |
+| Input validation is primary security principle | OWASP Top 10 | Always validate external input |
+| No side effects in Assert | Microsoft documentation | Asserts disappear in Release |
 | Think before coding, surgical changes | Karpathy guidelines | Behavior layer for all decisions |
-| Prefer records + immutability | Microsoft .NET docs, Wagner "Effective C#" | Reduces defensive surface |
+| Prefer records + immutability | Microsoft .NET docs, Wagner *Effective C#* | Reduces defensive surface |
 
 ---
 
@@ -453,8 +472,9 @@ if (failures.Count > 0)
 
 - **`dotnet-best-practices`** — naming, LINQ, DI, performance (style layer)
 - **`csharp-async`** — async/await, Task, channels (concurrency layer)
-- **`modern-csharp-coding-standards`** — record, pattern matching, Span/Memory (syntax layer)
+- **`modern-csharp-coding-standards`** — records, pattern matching, Span/Memory (syntax layer)
 - **`karpathy-guidelines`** — behavior layer (think/simplicity/surgical)
 - **`csharp-defensive-programming`** (this skill) — **how to fail safely** (failure layer)
 
 Use this skill **alongside** the others — defensive patterns sit on top of good style and good async, not in place of them.
+
