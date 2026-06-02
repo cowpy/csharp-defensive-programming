@@ -36,12 +36,17 @@
     "path": "skills/csharp-defensive-programming/SKILL.md",
     "priority": "high",
     "triggers": [
+      "DDL变更",
+      "存储过程修改",
+      "新增字段",
+      "API签名变更",
+      "防御性兼容",
       "审计错误处理",
       "审查输入验证",
       "设计异常策略",
       "空的 catch 块",
       "缺少 ArgumentNullException.ThrowIfNull",
-      "DDL 变更没有迁移",
+      "EF Core 实体没有并发令牌",
       "记录后忽略模式",
       "Result<T> vs 异常决策"
     ]
@@ -66,6 +71,10 @@
     {
       "name": "代码大全（McConnell）第 8 章",
       "note": "防御性编程理论"
+    },
+    {
+      "name": "OWASP Top 10",
+      "note": "安全编码最佳实践"
     }
   ]
 }
