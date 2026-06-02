@@ -1,0 +1,71 @@
+{
+  "name": "csharp-defensive-programming",
+  "version": "1.0.0",
+  "description": "C#/.NET defensive programming methodology: error handling, input validation, assertions, exception strategy, and defensive compatibility (DDL/method signatures).",
+  "author": {
+    "name": "cowpy",
+    "email": "cowpy@qq.com",
+    "github": "https://github.com/cowpy"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/cowpy/csharp-defensive-programming",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cowpy/csharp-defensive-programming.git"
+  },
+  "keywords": [
+    "csharp",
+    "dotnet",
+    "defensive-programming",
+    "error-handling",
+    "validation",
+    "exceptions",
+    "barricade",
+    "assertions",
+    "ddd",
+    "ef-core"
+  ],
+  "categories": [
+    "best-practices",
+    "code-quality",
+    "language-specific"
+  ],
+  "languages": ["csharp"],
+  "frameworks": [".net", "asp.net-core", "ef-core"],
+  "skill": {
+    "path": "skills/csharp-defensive-programming/SKILL.md",
+    "priority": "high",
+    "triggers": [
+      "audit error handling",
+      "review input validation",
+      "design exception strategy",
+      "empty catch block",
+      "missing ArgumentNullException.ThrowIfNull",
+      "DDL change without migration",
+      "logging-and-swallow pattern",
+      "Result<T> vs Exception decision"
+    ]
+  },
+  "related_skills": [
+    "dotnet-best-practices",
+    "csharp-async",
+    "modern-csharp-coding-standards",
+    "karpathy-guidelines"
+  ],
+  "inspirations": [
+    {
+      "name": "cc-defensive-programming",
+      "author": "ryanthedev",
+      "url": "https://github.com/ryanthedev/code-foundations"
+    },
+    {
+      "name": "go-defensive",
+      "author": "cxuu",
+      "url": "https://github.com/cxuu/golang-skills"
+    },
+    {
+      "name": "Code Complete (McConnell) ch.8",
+      "note": "Defensive programming theory"
+    }
+  ]
+}
