@@ -1,83 +1,83 @@
 ---
 name: csharp-defensive-programming
-description: "Use when auditing, designing, or implementing C#/.NET code for error handling, input validation, assertions, exception strategy, defensive compatibility (DDL/method signatures), or deciding between exception vs Result vs Try-pattern. Triggers on: empty catch blocks, missing ArgumentNullException.ThrowIfNull, public method without validation, EF Core entity without concurrency token, DDL change without migration script, logging-and-swallow patterns, production-only failure paths. Complements dotnet-best-practices (style/API) and csharp-async (concurrency) by adding the 'how to fail safely' layer."
+description: "适用于审计、设计或实现 C#/.NET 代码，用于错误处理、输入验证、断言、异常策略、防御性兼容性（DDL/方法签名），或决定使用异常 vs Result vs Try 模式。触发条件：空的 catch 块、缺少 ArgumentNullException.ThrowIfNull、公共方法没有验证、EF Core 实体没有并发令牌、DDL 变更没有迁移脚本、记录后忽略模式、仅生产环境的失败路径。补充 dotnet-best-practices（样式/API）和 csharp-async（并发），增加“如何安全失败”层。"
 priority: high
 license: MIT
 ---
 
-# C# Defensive Programming Methodology
+# C# 防御性编程方法论
 
-A C#/.NET adaptation of the Code-Complete defensive model (McConnell ch.8), with API-boundary checks inspired by go-defensive, layered with the user's `防御性兼容` DDL contract and Karpathy-style behavior rules.
+《代码大全》（McConnell 第 8 章）防御模型的 C#/.NET 改编，结合 go-defensive 的 API 边界检查，融入用户的“防御性兼容”DDL 契约和 Karpathy 风格的行为规则。
 
-> **Tradeoff:** These guidelines bias toward **correctness over speed** for production systems. For prototypes/spikes (max 1 week), use judgment.
+> **权衡考虑：** 这些准则偏向于**正确性胜于速度**，适用于生产系统。对于原型/快速开发（最多 1 周），请自行判断。
 
 ---
 
-## STOP — Never Skip (4 Invariants)
+## 停止 — 永远不要跳过（4 项不变式）
 
-| # | Check | Why Critical in C# |
+| # | 检查项 | C# 中为什么关键 |
 |---|-------|---------------------|
-| 1 | **No executable code in `Debug.Assert`** | Code disappears in `Release` builds → silent dead code |
-| 2 | **No empty `catch` blocks (no `catch { }` or `catch (Exception) { }` without action)** | Swallowed exceptions compound into impossible-to-diagnose production failures |
-| 3 | **External input validated at trust boundary** | "Internal team API" is still external — anything crossing process/network/file boundary is hostile until proven otherwise |
-| 4 | **Defensive compatibility on DDL/signature changes** | New fields/params must be optional+defaulted; code & migration scripts ship together; breaking changes HALT and ask first |
+| 1 | **不在 `Debug.Assert` 中包含可执行代码** | Release 构建中代码会消失 → 静默的死代码 |
+| 2 | **不要有空的 `catch` 块（不能有 `catch { }` 或 `catch (Exception) { }` 没有任何操作）** | 被吞掉的异常会演变成无法诊断的生产故障 |
+| 3 | **在信任边界验证外部输入** | “内部团队 API”仍然是外部的 — 任何跨进程/网络/文件边界的内容在被证明可信前都是敌对的 |
+| 4 | **DDL/签名变更时的防御性兼容性** | 新字段/参数必须是可选的且有默认值；代码和迁移脚本一起发布；破坏性变更请停止并先询问 |
 
-> **Security exception:** Auth/authz/crypto/PII code is **never** exempt from #1-#4, regardless of other factors. When in doubt, validate.
+> **安全例外：** 身份验证/授权/加密/个人身份信息（PII）代码**绝不**豁免于 #1-#4，无论其他因素如何。有疑问时，验证。
 
 ---
 
-## CRISIS TRIAGE (2 minutes, production down)
+## 危机处理（2 分钟，生产环境已宕机）
 
-### Immediate (30s each)
-1. **Public method missing `ArgumentNullException.ThrowIfNull` / range check on entry?** Add it NOW.
-2. **Empty `catch` hiding root cause?** Add structured logging (ILogger), then trace to source.
-3. **`Debug.Assert` containing mutations, I/O, or `await`?** Extract to standalone statement + log.
+### 立即执行（每项 30 秒）
+1. **公共方法缺少 `ArgumentNullException.ThrowIfNull` / 入口范围检查？** 现在立即添加。
+2. **空的 `catch` 隐藏了根本原因？** 添加结构化日志（ILogger），然后追溯到源头。
+3. **`Debug.Assert` 包含修改、I/O 或 `await`？** 提取为独立语句 + 日志。
 
-### Before Deploying Fix (60s)
-4. **Does fix match repo's existing error strategy** (exception vs `Result<T>` vs `Try*` pattern)? Grep first.
-5. **Is exception thrown at the right abstraction level?** Don't let `SqlException` leak from `GetEmployee()` — wrap as `EmployeeNotFoundException` (or your domain type).
+### 部署修复前（60 秒）
+4. **修复是否与仓库现有错误策略一致**（异常 vs `Result<T>` vs `Try*` 模式）？先搜索一下。
+5. **异常是否在正确的抽象层抛出？** 不要让 `SqlException` 从 `GetEmployee()` 泄漏出来 — 包装为 `EmployeeNotFoundException`（或你的域类型）。
 
-> **Why this works:** These 5 items catch ~80% of C# defensive bugs. Full checklist (24 items) is for non-emergency review.
+> **为什么这样有效：** 这 5 项能捕获约 80% 的 C# 防御性 bug。完整检查清单（24 项）用于非紧急审查。
 >
-> **Empty catch compounds.** A suppressed error in one layer cascades — your 2 AM debugging self will hate past-you.
+> **空 catch 会让问题恶化。** 一层中被抑制的错误会蔓延开来 — 你凌晨 2 点调试自己时会恨死过去的自己。
 
 ---
 
-## Key Definitions
+## 关键定义
 
-### External Input (treat as hostile)
-**Any data not provably controlled by the current code path:**
-- HTTP request body / query / headers / route values
-- Files (config, uploads, data files)
-- Network (downstream APIs, message queues, gRPC)
-- Environment variables, `IConfiguration` values
-- Database results (even from your own DB — schema drift, manual fixes)
-- Data from **any** other service, including internal ones
+### 外部输入（视为敌对）
+**任何不能证明由当前代码路径控制的数据：**
+- HTTP 请求体 / 查询 / 头部 / 路由值
+- 文件（配置、上传、数据文件）
+- 网络（下游 API、消息队列、gRPC）
+- 环境变量、`IConfiguration` 值
+- 数据库结果（即使来自你自己的 DB — 模式漂移、手动修复）
+- 来自**任何**其他服务的数据，包括内部服务
 
-**Rule of thumb:** If it crosses a process, network, or trust boundary — validate.
+**经验法则：** 如果它跨进程、网络或信任边界 — 验证它。
 
-### Assertion in C# (`Debug.Assert`)
-Code that checks itself at runtime. **Use only for conditions that should NEVER occur** (programmer bugs, violated invariants). Disabled in `Release` — anything you put inside must be safe to vanish.
+### C# 中的断言（`Debug.Assert`）
+在运行时检查自身的代码。**仅用于永远不应发生的条件**（程序员 bug、违反不变式）。在 Release 中禁用 — 你放在里面的任何内容都必须可以安全消失。
 
 ```csharp
-// GOOD: pure check, no side effects
-Debug.Assert(order.Lines.Count > 0, "Order must have at least one line");
+// 好：纯检查，无副作用
+Debug.Assert(order.Lines.Count > 0, "订单必须至少有一行");
 ```
 
 ```csharp
-// BAD: side-effecting code inside assertion
-Debug.Assert(ProcessPayment(order), "Payment must succeed"); // Payment skipped in Release!
+// 坏：断言内有副作用代码
+Debug.Assert(ProcessPayment(order), "支付必须成功"); // Release 中支付被跳过！
 ```
 
-### Barricade (防波堤)
-A damage-containment boundary. Public surface of a class/module validates everything that enters; inside the barricade, code can trust the data and use cheaper assertions for internal invariants.
+### 防波堤（Barricade）
+一个损伤遏制边界。类/模块的公共表面验证所有进入的内容；在防波堤内部，代码可以信任数据，并对内部不变式使用更便宜的断言。
 
 ```csharp
 public sealed class OrderService(IOrderRepository repo, ILogger<OrderService> log)
 {
     public async Task<Order> PlaceAsync(PlaceOrderRequest request, CancellationToken ct)
     {
-        // Barricade: validate external input
+        // 防波堤：验证外部输入
         ArgumentNullException.ThrowIfNull(request);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.CustomerId);
         ArgumentOutOfRangeException.ThrowIfNegative(request.Quantity);
@@ -89,111 +89,111 @@ public sealed class OrderService(IOrderRepository repo, ILogger<OrderService> lo
 }
 ```
 
-> **Limitation:** Barricades reduce redundant validation but do NOT replace defense-in-depth for security-critical paths (auth, crypto, PII). **Bugs in barricade validation happen** — keep critical checks layered.
+> **局限性：** 防波堤减少了冗余验证，但不能替代安全关键路径的深度防御（身份验证、加密、PII）。**防波堤验证中的 bug 确实会发生** — 保持关键检查的分层。
 
-### Correctness vs Robustness
-- **Correctness:** Never return an inaccurate result; no result > wrong result. Default for: medical/finance/audit/payment/inventory systems.
-- **Robustness:** Keep software running even if results are sometimes imperfect. Default for: consumer UIs, internal tools, exploratory dashboards.
+### 正确性 vs 健壮性
+- **正确性：** 绝不返回不准确的结果；没有结果 > 错误结果。默认用于：医疗/金融/审计/支付/库存系统。
+- **健壮性：** 保持软件运行，即使结果有时不完美。默认用于：消费者 UI、内部工具、探索性仪表板。
 
-| Domain | Lean Toward | Key Question |
+| 领域 | 倾向于 | 关键问题 |
 |--------|-------------|--------------|
-| Payment / Billing / Tax | **Correctness** | Would wrong data cause legal/compliance issues? |
-| Internal admin tools | **Robustness** | Can a tech user recover from a crash? |
-| Data pipelines / ETL | **Correctness** | Does downstream processing assume data integrity? |
-| Real-time trading / IoT | **Context-dependent** | Is stale data better or worse than no data? |
-| Consumer UI | **Robustness** | Is uptime more important than perfect accuracy? |
+| 支付 / 账单 / 税务 | **正确性** | 错误数据会导致法律/合规问题吗？ |
+| 内部管理工具 | **健壮性** | 技术用户能从崩溃中恢复吗？ |
+| 数据管道 / ETL | **正确性** | 下游处理是否假设数据完整性？ |
+| 实时交易 / IoT | **取决于上下文** | 过期数据比没有数据更好还是更差？ |
+| 消费者 UI | **健壮性** | 正常运行时间比完美准确性更重要吗？ |
 
-### Preconditions / Postconditions
-- **Preconditions** — what the caller must guarantee BEFORE calling.
-- **Postconditions** — what the method guarantees AFTER returning.
-- **Invariants** — what must always be true inside the type's lifetime.
+### 前置条件 / 后置条件
+- **前置条件** — 调用者在调用前必须保证什么。
+- **后置条件** — 方法在返回后保证什么。
+- **不变式** — 在类型的生命周期内必须始终为真的内容。
 
-In C#, encode with: `ArgumentNullException.ThrowIfNull`, `ArgumentOutOfRangeException`, `Debug.Assert` (internal), `IValidatableObject` (DTO), and `[ContractAnnotation]` (ReSharper) where available.
-
----
-
-## C# Boundary Checklist (in priority order)
-
-When hardening an API boundary (public method, controller endpoint, message handler, DI-injected service entry):
-
-```
-Reviewing an API boundary?
-├─ 1. Argument validation  → ArgumentNullException.ThrowIfNull / ThrowIfNullOrWhiteSpace / range checks
-├─ 2. Error strategy       → Match repo's pattern (exception vs Result<T> vs TryXxx)
-├─ 3. Async safety         → async Task (not async void), CancellationToken threaded, no .Result/.Wait()
-├─ 4. Resource cleanup     → using / await using / IAsyncDisposable; finally for legacy try/catch
-├─ 5. Output safety        → Don't return mutable internal collections (return IReadOnlyList<T>, immutable record)
-├─ 6. Time correctness     → DateTimeOffset (not DateTime) for persisted/computed times; TimeSpan for durations
-├─ 7. Enum safety          → Default to 0 = invalid sentinel; or use [FlagsEnum] / SmartEnum
-├─ 8. Crypto safety        → RandomNumberGenerator (not Random); never use Random for tokens/keys/nonces
-├─ 9. NRT discipline       → #nullable enable; annotate generics; no silent null returns
-├─ 10. Logging discipline  → Structured logging (ILogger<T>); no PII; correct log level
-└─ 11. Concurrency         → Immutable types by default; lock/Interlocked for shared state; SemaphoreSlim for async
-```
+在 C# 中，使用以下方式编码：`ArgumentNullException.ThrowIfNull`、`ArgumentOutOfRangeException`、`Debug.Assert`（内部）、`IValidatableObject`（DTO），以及可用时的 `[ContractAnnotation]`（ReSharper）。
 
 ---
 
-## Decision Flow: Assertion vs Exception vs `Result<T>` vs `Try*`
+## C# 边界检查清单（按优先级顺序）
+
+在强化 API 边界时（公共方法、控制器端点、消息处理器、DI 注入的服务入口）：
+
+```
+正在审查 API 边界？
+├─ 1. 参数验证  → ArgumentNullException.ThrowIfNull / ThrowIfNullOrWhiteSpace / 范围检查
+├─ 2. 错误策略       → 匹配仓库模式（异常 vs Result<T> vs TryXxx）
+├─ 3. 异步安全         → async Task（不是 async void），传递 CancellationToken，不要 .Result/.Wait()
+├─ 4. 资源清理     → using / await using / IAsyncDisposable；传统 try/catch 用 finally
+├─ 5. 输出安全        → 不要返回可变的内部集合（返回 IReadOnlyList<T>、不可变记录）
+├─ 6. 时间正确性     → 持久化/计算时间用 DateTimeOffset（不是 DateTime）；持续时间用 TimeSpan
+├─ 7. 枚举安全          → 默认 0 = 无效标记；或使用 [FlagsEnum] / SmartEnum
+├─ 8. 加密安全        → RandomNumberGenerator（不是 Random）；永远不要将 Random 用于令牌/密钥/随机数
+├─ 9. NRT 规范       → #nullable enable；标注泛型；不要静默返回 null
+├─ 10. 日志规范  → 结构化日志（ILogger<T>）；没有 PII；正确的日志级别
+└─ 11. 并发         → 默认使用不可变类型；共享状态用 lock/Interlocked；异步用 SemaphoreSlim
+```
+
+---
+
+## 决策流程：断言 vs 异常 vs `Result<T>` vs `Try*`
 
 ```text
-Handling a potentially bad condition in C#?
+在 C# 中处理可能的坏条件？
 │
-├─ Should this NEVER happen? (programmer bug, violated invariant)
-│   └─ YES → Debug.Assert (development) + ArgumentException / InvalidOperationException (public API)
+├─ 这应该永远不会发生？（程序员 bug、违反不变式）
+│   └─ 是 → Debug.Assert（开发） + ArgumentException / InvalidOperationException（公共 API）
 │
-├─ Is it anticipated runtime input (network down, file missing, user typed garbage)?
-│   └─ YES → Exception (default) — but check the strategy below
+├─ 是预期的运行时输入（网络中断、文件缺失、用户输入垃圾）？
+│   └─ 是 → 异常（默认）— 但检查下面的策略
 │
-├─ Is it expected/normal in the domain (key not found, login failed, validation rejected)?
-│   ├─ Caller SHOULD handle it → return `Result<T>` or `OneOf<T, TError>` / discriminated union
-│   ├─ Caller MAY handle it → `bool TryXxx(out T value)` pattern
-│   └─ Caller SHOULD NOT handle → throw a specific exception type
+├─ 是域中预期的/正常的（键未找到、登录失败、验证被拒绝）？
+│   ├─ 调用者应该处理 → 返回 `Result<T>` 或 `OneOf<T, TError>` / 可区分联合
+│   ├─ 调用者可能处理 → `bool TryXxx(out T value)` 模式
+│   └─ 调用者不应该处理 → 抛出特定异常类型
 │
-└─ Highly robust system (long-running service, must not crash)?
-    └─ BOTH: validate (defensive) AND wrap in try/catch with graceful fallback (offensive recovery)
+└─ 高度健壮的系统（长时间运行的服务，绝不能崩溃）？
+    └─ 两者都：验证（防御性）并用 try/catch 包装加优雅回退（进攻性恢复）
 ```
 
-### Choose Your Error Strategy Per Project (and document it)
+### 每个项目选择你的错误策略（并记录它）
 
-| Strategy | When to Use | Tradeoff |
+| 策略 | 何时使用 | 权衡 |
 |----------|-------------|----------|
-| **Exceptions** (default in .NET) | Truly exceptional, deep call stacks, async-heavy | Performance cost on hot paths; can leak across layers if not wrapped |
-| **`Result<T>` / `OneOf<T, TError>`** | Domain expected outcomes (login, validation, business rules) | Explicit at call site; forces handling; less idiomatic in BCL |
-| **`TryXxx` (bool, out T)** | Cheap, frequent, performance-sensitive parsing (int.TryParse style) | Hides the error reason; only works for one error class |
-| **Exception + Polly** | External service calls, transient failures | Adds resilience policy; can mask bugs if retries are too broad |
+| **异常**（.NET 中默认） | 真正异常的、深层调用栈、大量异步 | 热路径上的性能成本；如果不包装可能跨层泄漏 |
+| **`Result<T>` / `OneOf<T, TError>`** | 域预期结果（登录、验证、业务规则） | 调用点明确；强制处理；在 BCL 中不太习惯 |
+| **`TryXxx`（bool, out T）** | 廉价、频繁、性能敏感的解析（int.TryParse 风格） | 隐藏错误原因；仅适用于一种错误类别 |
+| **异常 + Polly** | 外部服务调用、临时故障 | 增加恢复策略；如果重试范围太广可能掩盖 bug |
 
-> **Rule:** Pick ONE strategy per module/layer. Mixing "Result here, exception there" in the same codebase is the #1 source of defensive confusion. **Document the choice in `CONTEXT.md` / `docs/adr/`.**
+> **规则：** 每个模块/层选择**一种**策略。同一代码库中混合“这里用 Result，那里用异常”是防御性混乱的首要来源。**在 `CONTEXT.md` / `docs/adr/` 中记录选择。**
 
 ---
 
-## The C# Defensive Patterns (Checklist)
+## C# 防御性模式（检查清单）
 
-### 1. Argument Validation (Cheap, High-Value)
+### 1. 参数验证（廉价、高价值）
 
 ```csharp
-// .NET 6+ idiomatic
+// .NET 6+ 习惯用法
 public void Process(string id, int count, Stream stream, CancellationToken ct = default)
 {
     ArgumentException.ThrowIfNullOrEmpty(id);
     ArgumentNullException.ThrowIfNull(stream);
     ArgumentOutOfRangeException.ThrowIfNegativeOrZero(count);
-    // CancellationToken default-injected; just pass through
+    // CancellationToken 默认注入；直接传递即可
 
-    // ... actual work
+    // ... 实际工作
 }
 ```
 
-> **Note:** `ArgumentNullException.ThrowIfNull` is preferred over `if (x == null) throw new ArgumentNullException(nameof(x));` — shorter, no risk of inverted condition, and analyzable.
+> **注意：** `ArgumentNullException.ThrowIfNull` 优于 `if (x == null) throw new ArgumentNullException(nameof(x));` — 更短，没有反向条件的风险，并且可分析。
 
-### 2. Defensive Disposal (Resource Cleanup)
+### 2. 防御性释放（资源清理）
 
 ```csharp
-// GOOD: scope-based
+// 好：基于作用域
 await using var stream = await httpClient.GetStreamAsync(url, ct);
 await using var reader = new StreamReader(stream);
-// reader & stream disposed even on exception
+// 即使发生异常，reader 和 stream 也会被释放
 
-// GOOD: explicit finally for legacy code
+// 好：传统代码显式使用 finally
 IDbConnection conn;
 try
 {
@@ -205,19 +205,19 @@ finally
     conn?.Dispose();
 }
 
-// BAD: resource leak on exception
+// 坏：异常时资源泄漏
 var stream = OpenStream();
 DoWork(stream);
-stream.Close(); // never reached if DoWork throws
+stream.Close(); // 如果 DoWork 抛出，永远不会到达
 ```
 
-### 3. Async-Specific Defensive Rules
+### 3. 异步特定防御规则
 
 ```csharp
-// BAD: unhandled Task continuation crashes process silently
-public Task ProcessAsync() => DoWorkAsync(); // exceptions in unobserved task
+// 坏：未处理的 Task 延续会静默使进程崩溃
+public Task ProcessAsync() => DoWorkAsync(); // 未观察到的 task 中的异常
 
-// GOOD: explicit error path
+// 好：显式错误路径
 public async Task ProcessAsync(CancellationToken ct)
 {
     try
@@ -226,45 +226,45 @@ public async Task ProcessAsync(CancellationToken ct)
     }
     catch (OperationCanceledException) when (ct.IsCancellationRequested)
     {
-        throw; // expected, do not log as error
+        throw; // 预期的，不要记录为错误
     }
     catch (Exception ex)
     {
-        logger.LogError(ex, "DoWork failed");
-        throw new ServiceException("Processing failed", ex); // wrap at right abstraction
+        logger.LogError(ex, "DoWork 失败");
+        throw new ServiceException("处理失败", ex); // 在正确的抽象层包装
     }
 }
 ```
 
-> **Additional rules (see `csharp-async` skill for full guidance):**
-> - Never `.Result` / `.Wait()` (deadlock risk)
-> - `async void` ONLY for event handlers
-> - Thread `CancellationToken` through every layer
+> **其他规则（完整指导请见 `csharp-async` 技能）：**
+> - 永远不要 `.Result` / `.Wait()`（死锁风险）
+> - `async void` **仅**用于事件处理器
+> - 每个层都传递 `CancellationToken`
 
-### 4. Empty Catch — The Silent Killer
+### 4. 空 Catch — 沉默杀手
 
 ```csharp
-// BAD: silent failure
+// 坏：静默失败
 try { await NotifyAsync(evt, ct); } catch { }
 
-// BAD: log-and-swallow without rethrow or escalation
+// 坏：记录后忽略，没有重新抛出或升级
 try { await NotifyAsync(evt, ct); } catch (Exception ex) { logger.LogWarning(ex, ""); }
 
-// GOOD: act on the exception
+// 好：对异常采取行动
 try
 {
     await NotifyAsync(evt, ct);
 }
 catch (HttpRequestException ex) when (IsTransient(ex))
 {
-    // rethrow, retry, or escalate to a domain-level failure
+    // 重新抛出、重试或升级到域级失败
     throw new NotificationDeliveryException(evt.Id, ex);
 }
 ```
 
-> **Rule:** Every `catch` must do one of: **log + rethrow**, **wrap + throw new**, **retry**, or **record and continue with a documented business reason**. "Catch and ignore" is forbidden unless there's a comment explaining the imperative (e.g., "fire-and-forget notification, failure is acceptable").
+> **规则：** 每个 `catch` 必须执行以下之一：**记录 + 重新抛出**、**包装 + 抛出新异常**、**重试**，或**记录并继续，并有记录的业务原因**。“捕获并忽略”是被禁止的，除非有注释解释必要性（例如，“即发即弃通知，失败可以接受”）。
 
-### 5. NRT + `IValidatableObject` (DDD DTO Validation)
+### 5. NRT + `IValidatableObject`（DDD DTO 验证）
 
 ```csharp
 public sealed record CreateOrderRequest(
@@ -274,187 +274,187 @@ public sealed record CreateOrderRequest(
     public IEnumerable<ValidationResult> Validate(ValidationContext _)
     {
         if (string.IsNullOrWhiteSpace(CustomerId))
-            yield return new ValidationResult("CustomerId required", new[] { nameof(CustomerId) });
+            yield return new ValidationResult("CustomerId 是必需的", new[] { nameof(CustomerId) });
         if (Lines is null || Lines.Count == 0)
-            yield return new ValidationResult("At least one line required", new[] { nameof(Lines) });
+            yield return new ValidationResult("至少需要一行", new[] { nameof(Lines) });
     }
 }
 ```
 
-### 6. Concurrency Tokens on EF Entities (DbUpdateConcurrencyException source)
+### 6. EF 实体上的并发令牌（DbUpdateConcurrencyException 来源）
 
 ```csharp
-// Mark every aggregate root you mutate
+// 标记每个你修改的聚合根
 public class Order
 {
     public Guid Id { get; private set; }
-    public uint Version { get; private set; } // [ConcurrencyCheck] in EF
+    public uint Version { get; private set; } // EF 中的 [ConcurrencyCheck]
     // ...
 }
 ```
 
-> **Why:** Without a concurrency token, silent lost-update bugs occur. Catch `DbUpdateConcurrencyException` at the service boundary and return a domain-level conflict result.
+> **为什么：** 没有并发令牌，会发生静默的丢失更新 bug。在服务边界捕获 `DbUpdateConcurrencyException` 并返回域级冲突结果。
 
-### 7. Immutability as Defense (Records + `with`)
+### 7. 不可变性作为防御（记录 + `with`）
 
 ```csharp
-// Prefer records: value-equality, immutable by default
+// 优先使用记录：值相等、默认不可变
 public sealed record Money(decimal Amount, string Currency)
 {
     public Money Add(Money other)
     {
         if (Currency != other.Currency)
-            throw new InvalidOperationException("Currency mismatch");
+            throw new InvalidOperationException("货币不匹配");
         return this with { Amount = Amount + other.Amount };
     }
 }
 ```
 
-> **Why:** Reduces defensive-mutation surface. If you can't mutate shared state, you don't need to defend against mutation races.
+> **为什么：** 减少防御性修改表面。如果你不能修改共享状态，就不需要防御修改竞争。
 
 ---
 
-## Pattern Reuse Gate (BEFORE writing new error handling)
+## 模式重用门（在编写新错误处理之前）
 
-**Search the codebase first. Inconsistency is the worst defensive code smell.**
+**首先搜索代码库。不一致是最糟糕的防御性代码气味。**
 
-| Search For | Why |
+| 搜索内容 | 为什么 |
 |------------|-----|
-| Same error type elsewhere in the module | Is it logged? Thrown? Wrapped? |
-| Established `Result<T>` or exception convention | Don't introduce a new strategy silently |
-| Custom exception base classes | Use them — don't throw raw `Exception` |
-| Logging patterns (structured vs string interpolation) | Match the existing convention |
-| `IValidatableObject` / FluentValidation usage | Don't add a parallel validation system |
+| 模块其他地方相同的错误类型 | 它被记录了吗？被抛出了吗？被包装了吗？ |
+| 已建立的 `Result<T>` 或异常约定 | 不要悄悄引入新策略 |
+| 自定义异常基类 | 使用它们 — 不要抛出原始 `Exception` |
+| 日志模式（结构化 vs 字符串插值） | 匹配现有约定 |
+| `IValidatableObject` / FluentValidation 使用 | 不要添加并行验证系统 |
 
-**If pattern found:** Follow it. Consistency beats cleverness.
-**If no pattern found:** You're establishing one. Document the decision in `docs/adr/`. Get review.
-
----
-
-## Defensive Compatibility · DDL/Migration/Contract (USER MANDATE)
-
-**Trigger:** Adding/modifying a field, method signature, interface, stored procedure, or any DDL change.
-
-### Hard Constraints
-
-1. **Backward compatible by default.** New fields, new parameters → optional + default value. Never break existing callers.
-2. **Code & scripts ship together.** Changing stored proc / view / table? **Synchronously check and update** the migration / DDL script in the same task. Mismatched code and script = incident.
-3. **Breaking change → HALT and ask.** Deleting a field, changing a return type, changing a signature incompatibly? **Stop immediately**, surface the breaking change, ask the user to confirm the upgrade path before proceeding.
-4. **Silent field additions = incident.** Any DB field addition MUST be audited for callers + migration script. Inconsistency → fail loud, never silently.
-
-### Pre-commit Self-Check (answer all 3)
-
-- [ ] Do existing callers / older DB versions still work?
-- [ ] Is the migration / upgrade script in the same commit?
-- [ ] Have I surfaced the script path to the user for backup?
-
-> **Origin:** `防御性兼容 · Defensive Compatibility` in workspace `CLAUDE.md`. This is a **highest-priority** rule, overriding convenience.
+**如果找到模式：** 遵循它。一致性胜过聪明。
+**如果没找到模式：** 你正在建立一个。在 `docs/adr/` 中记录决定。获得审查。
 
 ---
 
-## Async & Concurrent Defensive Patterns
+## 防御性兼容性 · DDL/迁移/契约（用户强制要求）
 
-### `Task.WhenAll` / `Task.WhenAllSettled` analog
+**触发条件：** 添加/修改字段、方法签名、接口、存储过程或任何 DDL 变更。
+
+### 硬约束
+
+1. **默认向后兼容。** 新字段、新参数 → 可选 + 默认值。永远不要破坏现有调用者。
+2. **代码和脚本一起发布。** 修改存储过程/视图/表？**在同一任务中同步检查和更新**迁移/DDL 脚本。代码和脚本不匹配 = 事故。
+3. **破坏性变更 → 停止并询问。** 删除字段、更改返回类型、不兼容地更改签名？**立即停止**，暴露破坏性变更，在继续前让用户确认升级路径。
+4. **静默字段添加 = 事故。** 任何数据库字段添加**必须**审计调用者 + 迁移脚本。不一致 → 大声失败，永远不要静默。
+
+### 提交前自检（全部回答）
+
+- [ ] 现有调用者/旧数据库版本仍然有效吗？
+- [ ] 迁移/升级脚本在同一提交中吗？
+- [ ] 我是否已将脚本路径暴露给用户进行备份？
+
+> **来源：** 工作区 `CLAUDE.md` 中的 `防御性兼容 · Defensive Compatibility`。这是**最高优先级**规则，覆盖便利性。
+
+---
+
+## 异步和并发防御模式
+
+### `Task.WhenAll` / `Task.WhenAllSettled` 类似物
 
 ```csharp
-// BAD: first failure loses context of others
+// 坏：第一个失败会丢失其他失败的上下文
 await Task.WhenAll(jobs);
 
-// GOOD: aggregate failures, decide policy
+// 好：聚合失败，决定策略
 var results = await Task.WhenAll(jobs.Select(j => j.RunSafelyAsync(ct)));
 var failures = results.Where(r => !r.Success).ToList();
 if (failures.Count > 0)
 {
-    logger.LogWarning("{Count} jobs failed", failures.Count);
-    // policy: fail entirely, or continue with partial?
+    logger.LogWarning("{Count} 个作业失败", failures.Count);
+    // 策略：完全失败，还是继续部分执行？
 }
 ```
 
-### Cancellation discipline
-- Every public async method takes `CancellationToken ct = default`.
-- Check `ct.ThrowIfCancellationRequested()` in long loops.
-- `OperationCanceledException` is **expected**, log at `Debug` (not `Error`) and rethrow.
+### 取消规范
+- 每个公共异步方法都接受 `CancellationToken ct = default`。
+- 在长循环中检查 `ct.ThrowIfCancellationRequested()`。
+- `OperationCanceledException` 是**预期的**，以 `Debug`（不是 `Error`）记录并重新抛出。
 
-### Channels for producer/consumer
-- `BoundedChannel` with `FullMode = Wait` or `DropOldest` (not unbounded — memory exhaustion defense).
-- See `csharp-concurrency-patterns` skill for deeper guidance.
+### 生产者/消费者用 Channels
+- `BoundedChannel` 带 `FullMode = Wait` 或 `DropOldest`（不是无界 — 内存耗尽防御）。
+- 更深入的指导请见 `csharp-concurrency-patterns` 技能。
 
 ---
 
-## Offensive Programming (Make Failures Painful in Dev)
+## 进攻性编程（在开发中让失败更痛苦）
 
-> **Paradoxon:** During development, make errors obvious and obnoxious. During production, make them quiet with structured recovery.
+> **悖论：** 在开发期间，让错误明显且讨厌。在生产期间，用结构化恢复让它们安静。
 
-| Technique | C# Example |
+| 技术 | C# 示例 |
 |-----------|------------|
-| **Make asserts abort** | `Debug.Assert` + `Assert.Fail` is OK; for non-debug use `ThrowIfNull` (not swallowed) |
-| **Default switch throws** | `default: throw new UnreachableException();` in exhaustive switches |
-| **Fail fast on impossible state** | `InvalidOperationException` for invariant violations in public methods |
-| **Throw on unobserved tasks** | `TaskScheduler.UnobservedTaskException` → log fatal in dev, alert in prod |
-| **Pre-commit hooks** | Treat warnings as errors (`<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`) |
+| **让断言中止** | `Debug.Assert` + `Assert.Fail` 可以；非调试用 `ThrowIfNull`（不吞掉） |
+| **默认 switch 抛出** | 穷举 switch 中使用 `default: throw new UnreachableException();` |
+| **不可能状态快速失败** | 公共方法中不变式违反用 `InvalidOperationException` |
+| **未观察到的 task 抛出** | `TaskScheduler.UnobservedTaskException` → 开发中记录致命，生产中告警 |
+| **预提交钩子** | 把警告当作错误（`<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`） |
 
 ---
 
-## Production Transition (What to Keep, What to Strip)
+## 生产过渡（保留什么，移除什么）
 
-| Debug Aid | Action | Rationale |
+| 调试辅助工具 | 操作 | 理由 |
 |-----------|--------|-----------|
-| `Debug.Assert` for invariants | **KEEP** (becomes no-op in Release; not a runtime cost) | Documents the invariant for next reader |
-| `if (DEBUG) LogVerbose(...)` | **REMOVE** or gate by `IsEnabled(LogLevel.Trace)` | Don't leak verbose noise to prod |
-| Hard crash on bad data | **WRAP** in try/catch with telemetry | Users need to save work |
-| Helpful dev exception messages | **SANITIZE** for prod (no stack traces, no internal paths) | Don't help attackers |
-| `Console.WriteLine` for debug | **REPLACE** with `ILogger<T>` from day 1 | Standardized structured logging |
-| Throw on first validation error | **OK** in API controllers; **collect-all** in form/DTO validation | Better UX in UI |
+| 不变式的 `Debug.Assert` | **保留**（Release 中变为 no-op；没有运行时成本） | 为下一个读者记录不变式 |
+| `if (DEBUG) LogVerbose(...)` | **移除** 或用 `IsEnabled(LogLevel.Trace)` 门控 | 不要向生产泄漏冗长噪音 |
+| 坏数据上的硬崩溃 | **用 try/catch 加遥测包装** | 用户需要保存工作 |
+| 有用的开发异常消息 | **为生产清理**（没有堆栈跟踪，没有内部路径） | 不要帮助攻击者 |
+| 用于调试的 `Console.WriteLine` | **从第一天起就用 `ILogger<T>` 替换** | 标准化结构化日志 |
+| 第一个验证错误就抛出 | API 控制器中**可以**；表单/DTO 验证中**收集所有** | UI 中更好的用户体验 |
 
 ---
 
-## When NOT to Use This Skill
+## 何时不使用此技能
 
-- **Pure functions with records** — no mutable state to defend; trust the type system.
-- **Prototype / spike code** (time-boxed ≤ 1 week) — defer error strategy until design stabilizes.
-- **Test code / test doubles** — intentionally violate production patterns (e.g., throwing in test setup is fine).
-- **Performance-critical inner loops** — only if profiling proves defensive checks cost >5%; otherwise keep them.
+- **带记录的纯函数** — 没有可变状态要防御；信任类型系统。
+- **原型/快速开发代码**（时间盒 ≤ 1 周） — 推迟错误策略直到设计稳定。
+- **测试代码/测试替身** — 故意违反生产模式（例如，测试设置中抛出是可以的）。
+- **性能关键的内部循环** — 仅在分析证明防御性检查成本 >5% 时；否则保留它们。
 
-> **But:** if the code touches auth, payments, crypto, PII, medical, or compliance — these exceptions do not apply. **Always validate.**
+> **但是：** 如果代码涉及身份验证、支付、加密、PII、医疗或合规 — 这些例外不适用。**始终验证。**
 
 ---
 
-## Crisis Invariants — Quick Card (print and pin)
+## 危机不变式 — 快速卡片（打印并贴起来）
 
 ```
-[ ] No code in Debug.Assert body
-[ ] No empty catch (log+rethrow, wrap+throw, retry, or documented ignore)
-[ ] Public method validates all args (ThrowIfNull / ThrowIfNullOrEmpty / range)
-[ ] async Task not async void; CancellationToken threaded
-[ ] using / await using for disposables; finally only for legacy
-[ ] Result<T> vs Exception strategy matches module convention
-[ ] NRT enabled; no silent null returns
-[ ] DDL/contract change: backward compatible + migration script + HALT on breaking
-[ ] EF aggregate roots have concurrency token
-[ ] Structured logging; no PII in logs
+[ ] Debug.Assert 体中没有代码
+[ ] 没有空 catch（记录+重新抛出、包装+抛出、重试，或记录的忽略）
+[ ] 公共方法验证所有参数（ThrowIfNull / ThrowIfNullOrEmpty / 范围）
+[ ] async Task 不是 async void；传递 CancellationToken
+[ ] 可释放对象用 using / await using；仅传统代码用 finally
+[ ] Result<T> vs 异常策略匹配模块约定
+[ ] 启用 NRT；没有静默 null 返回
+[ ] DDL/契约变更：向后兼容 + 迁移脚本 + 破坏性变更停止
+[ ] EF 聚合根有并发令牌
+[ ] 结构化日志；日志中没有 PII
 ```
 
 ---
 
-## Evidence Summary
+## 证据摘要
 
-| Claim | Source | Application |
+| 主张 | 来源 | 应用 |
 |-------|--------|-------------|
-| Barricades + assertions split external/internal | McConnell, *Code Complete* ch.8 | Trust boundary design |
-| 8-step API boundary order | go-defensive (cxuu) | Adapted to C# idioms |
-| "Garbage in, garbage out" is obsolete | McConnell p.188 | Validate external input always |
-| Defensive compatibility = highest-priority DDL rule | User `CLAUDE.md` | Mandatory, overrides convenience |
-| Think before coding, surgical changes | Karpathy guidelines | Behavior layer for all decisions |
-| Prefer records + immutability | Microsoft .NET docs, Wagner "Effective C#" | Reduces defensive surface |
+| 防波堤 + 断言划分外部/内部 | McConnell，《代码大全》第 8 章 | 信任边界设计 |
+| 8 步 API 边界顺序 | go-defensive（cxuu） | 适应 C# 习惯用法 |
+| “垃圾进，垃圾出”已过时 | McConnell p.188 | 始终验证外部输入 |
+| 防御性兼容性 = 最高优先级 DDL 规则 | 用户 `CLAUDE.md` | 强制要求，覆盖便利性 |
+| 编码前思考，手术式变更 | Karpathy 准则 | 所有决策的行为层 |
+| 优先使用记录 + 不可变性 | Microsoft .NET 文档、Wagner《Effective C#》 | 减少防御性表面 |
 
 ---
 
-## Related Skills (Layered Usage)
+## 相关技能（分层使用）
 
-- **`dotnet-best-practices`** — naming, LINQ, DI, performance (style layer)
-- **`csharp-async`** — async/await, Task, channels (concurrency layer)
-- **`modern-csharp-coding-standards`** — record, pattern matching, Span/Memory (syntax layer)
-- **`karpathy-guidelines`** — behavior layer (think/simplicity/surgical)
-- **`csharp-defensive-programming`** (this skill) — **how to fail safely** (failure layer)
+- **`dotnet-best-practices`** — 命名、LINQ、DI、性能（样式层）
+- **`csharp-async`** — async/await、Task、channels（并发层）
+- **`modern-csharp-coding-standards`** — 记录、模式匹配、Span/Memory（语法层）
+- **`karpathy-guidelines`** — 行为层（思考/简洁/手术式）
+- **`csharp-defensive-programming`**（本技能）— **如何安全失败**（失败层）
 
-Use this skill **alongside** the others — defensive patterns sit on top of good style and good async, not in place of them.
+与其他技能**一起**使用此技能 — 防御性模式位于良好样式和良好异步之上，而不是替代它们。

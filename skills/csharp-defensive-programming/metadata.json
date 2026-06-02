@@ -1,7 +1,7 @@
 {
   "name": "csharp-defensive-programming",
   "version": "1.0.0",
-  "description": "C#/.NET defensive programming methodology: error handling, input validation, assertions, exception strategy, and defensive compatibility (DDL/method signatures).",
+  "description": "C#/.NET 防御性编程方法论：错误处理、输入验证、断言、异常策略和防御性兼容性（DDL/方法签名）。",
   "author": {
     "name": "cowpy",
     "email": "cowpy@qq.com",
@@ -36,14 +36,14 @@
     "path": "skills/csharp-defensive-programming/SKILL.md",
     "priority": "high",
     "triggers": [
-      "audit error handling",
-      "review input validation",
-      "design exception strategy",
-      "empty catch block",
-      "missing ArgumentNullException.ThrowIfNull",
-      "DDL change without migration",
-      "logging-and-swallow pattern",
-      "Result<T> vs Exception decision"
+      "审计错误处理",
+      "审查输入验证",
+      "设计异常策略",
+      "空的 catch 块",
+      "缺少 ArgumentNullException.ThrowIfNull",
+      "DDL 变更没有迁移",
+      "记录后忽略模式",
+      "Result<T> vs 异常决策"
     ]
   },
   "related_skills": [
@@ -64,8 +64,8 @@
       "url": "https://github.com/cxuu/golang-skills"
     },
     {
-      "name": "Code Complete (McConnell) ch.8",
-      "note": "Defensive programming theory"
+      "name": "代码大全（McConnell）第 8 章",
+      "note": "防御性编程理论"
     }
   ]
 }
