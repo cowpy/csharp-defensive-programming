@@ -1,0 +1,64 @@
+{
+  "name": "code-complexity-governor",
+  "version": "1.0.0",
+  "description": "强制管控代码圈复杂度、分支、条件、返回路径、嵌套层级，所有代码生成/重构/评审自动校验",
+  "author": {
+    "name": "cowpy",
+    "email": "cowpy@qq.com",
+    "github": "https://github.com/cowpy"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/cowpy/csharp-defensive-programming",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cowpy/csharp-defensive-programming.git"
+  },
+  "keywords": [
+    "code-quality",
+    "complexity",
+    "refactor",
+    "code-review",
+    "cyclomatic-complexity",
+    "nesting-depth",
+    "csharp",
+    "dotnet"
+  ],
+  "categories": [
+    "code-quality",
+    "best-practices",
+    "refactoring"
+  ],
+  "languages": ["csharp"],
+  "frameworks": [".net", "asp.net-core"],
+  "skill": {
+    "path": "skills/code-complexity-governor/SKILL.md",
+    "priority": "high",
+    "triggers": [
+      "code complexity",
+      "cyclomatic complexity",
+      "nesting depth",
+      "method too long",
+      "too many return statements",
+      "if condition too complex",
+      "refactor code",
+      "code review complexity"
+    ]
+  },
+  "related_skills": [
+    "csharp-defensive-programming",
+    "dotnet-best-practices",
+    "modern-csharp-coding-standards"
+  ],
+  "inspirations": [
+    {
+      "name": "code-complexity-audit",
+      "author": "nkootstra",
+      "url": "https://github.com/nkootstra/skills"
+    },
+    {
+      "name": "low-complexity",
+      "author": "mryll",
+      "url": "https://github.com/mryll/skills"
+    }
+  ]
+}
