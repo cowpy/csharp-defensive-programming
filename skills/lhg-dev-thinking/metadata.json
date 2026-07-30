@@ -1,0 +1,38 @@
+{
+  "name": "lhg-dev-thinking",
+  "version": "1.0.0",
+  "description": "Distills and applies LHG's development principles from conversation history. Invoke when user asks to update/apply/refine their development thinking, or when making architectural/naming/API design decisions.",
+  "author": {
+    "name": "LHG"
+  },
+  "license": "MIT",
+  "keywords": [
+    "development-thinking",
+    "architecture",
+    "naming",
+    "api-design",
+    "webhook",
+    "open-platform",
+    "best-practices"
+  ],
+  "categories": [
+    "best-practices",
+    "architecture",
+    "project-specific"
+  ],
+  "languages": ["csharp"],
+  "skill": {
+    "path": "skills/lhg-dev-thinking/SKILL.md",
+    "priority": "high",
+    "triggers": [
+      "update my development thinking",
+      "distill development principles",
+      "record to lhg-dev-thinking",
+      "naming convention",
+      "webhook design",
+      "open platform integration",
+      "api return model",
+      "error code design"
+    ]
+  }
+}
