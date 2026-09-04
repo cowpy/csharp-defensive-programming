@@ -36,6 +36,7 @@ pwsh -ExecutionPolicy Bypass -File skills\_install_to_work.ps1 -VerifyOnly
 
 - **备份绝不能放在 IDE 技能扫描目录内**。旧脚本把被替换的目录原地改名为 `<技能名>.backup-<时间戳>` 留在 skills 根下——该目录**仍被 TRAE 索引成一个可加载技能**（frontmatter name 相同），会与正式技能形成同名重复；实测 TRAE 加载技能时优先命中了 backup 目录而非 Junction，导致"改了仓库但技能不生效"。
 - 现行规则：实体目录备份统一移到扫描范围外的 `C:\AI-Skills\_backups\`（脚本自动完成）；旧 Junction/符号链接本身不含内容，**不备份、直接删 reparse point**（`[IO.Directory]::Delete($path, $false)` 只删链接不碰目标），备份 Junction 会制造指向其他位置的"幽灵技能"。
+- **链路不备份的完整理由**：Junction 只是指针，"改名备份"它不会保留任何内容，反而会留下一个消费方枚举时当作有效条目的幽灵。本次事故链条：`.trae-cn\skills\lhg-dev-thinking.backup-*`（Junction）→ 指向 `.agents\skills\lhg-dev-thinking`（当时是实体旧目录）→ 后来 `.agents` 实体被替换成指向仓库的 Junction → 形成"备份 Junction → 实体旧目录"的跨目录幽灵链，IDE 扫描时命中幽灵。**禁止 `Remove-Item -Recurse` 删链接**（会顺着链接删目标内容），只能用 `[IO.Directory]::Delete($path, $false)`。
 - 结论：备份目录放哪里本身就是"播种性决策"——带技能名前缀的任何实体目录出现在扫描根内，都会被 IDE 当作技能。
 
 ## 执行步骤（照做）
