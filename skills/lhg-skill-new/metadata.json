@@ -1,0 +1,37 @@
+{
+  "name": "lhg-skill-new",
+  "version": "1.0.0",
+  "description": "Fixed bootstrap procedure for creating/distilling new LHG personal skills: git repo as the single source of truth, Junction linking into every IDE skill directory, metadata scaffolding, install-script registration, and commit/push. Invoke when the user asks to create a new skill or distill a workflow into a skill.",
+  "author": {
+    "name": "LHG"
+  },
+  "license": "MIT",
+  "keywords": [
+    "skill-creation",
+    "bootstrap",
+    "distillation",
+    "single-source-of-truth",
+    "junction",
+    "meta-skill"
+  ],
+  "categories": [
+    "best-practices",
+    "tooling",
+    "project-specific"
+  ],
+  "languages": ["markdown", "powershell"],
+  "skill": {
+    "path": "skills/lhg-skill-new/SKILL.md",
+    "priority": "high",
+    "triggers": [
+      "create new skill",
+      "new lhg skill",
+      "distill into a skill",
+      "bootstrap skill",
+      "add a new skill",
+      "新建技能",
+      "蒸馏一个技能",
+      "沉淀成技能"
+    ]
+  }
+}

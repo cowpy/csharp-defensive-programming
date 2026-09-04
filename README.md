@@ -24,13 +24,20 @@ LHG 个人开发思路蒸馏（59 条原则）：命名与领域表达、Webhook
 
 > Code-documentation bidirectional sync system with a thin project-rules constitution and docs skeleton; init/apply/check modes.
 
+### 5. lhg-skill-new
+新技能蒸馏/创建的固定流程（元技能）：一句话需求即可走完"建 SKILL.md/metadata.json → 登记安装脚本 → Junction 链接三类 IDE 目录 → 验证 hash → commit/push"，固化仓库布局、链接落点和命名约定，避免每次重复解释。
+
+> Meta-skill: fixed bootstrap procedure for creating new LHG skills with repo-as-single-source-of-truth and Junction linking.
+
 ## 本地链接安装（个人技能，单事实源）
 
-`lhg-dev-thinking` 与 `lhg-dev-doc` 以本仓库为**唯一事实源**，通过 Junction 链接到各 IDE 技能目录，改仓库一处即全局生效：
+`lhg-dev-thinking`、`lhg-dev-doc`、`lhg-skill-new` 以本仓库为**唯一事实源**，通过 Junction 链接到各 IDE 技能目录，改仓库一处即全局生效：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File skills\_install_to_work.ps1
+pwsh -ExecutionPolicy Bypass -File skills\_install_to_work.ps1
 ```
+
+> 注意：脚本含中文注释，请用 PowerShell 7（`pwsh`）运行；Windows PowerShell 5.1 按 GBK 解析会报语法错误。
 
 脚本会链接三类位置：`.trae-cn\skills\`（TRAE 主界面读取）、`.agents\skills\`（全局技能目录）、`.trae-cn\builtin\work\<model>\skills\`（各 work 模型）。已存在的实体目录会自动备份为 `*.backup-<时间戳>` 后替换，不会丢内容。
 
@@ -147,10 +154,13 @@ The skill triggers on:
     ├── lhg-dev-thinking/                        # LHG 开发思路蒸馏（个人，单事实源）
     │   ├── SKILL.md
     │   └── metadata.json
-    └── lhg-dev-doc/                             # LHG 文档宪法：代码-文档双向同步（个人，单事实源）
+    ├── lhg-dev-doc/                             # LHG 文档宪法：代码-文档双向同步（个人，单事实源）
+    │   ├── SKILL.md
+    │   ├── metadata.json
+    │   └── templates/                           # project_rules.md 与 docs/ 骨架模板
+    └── lhg-skill-new/                          # 新技能蒸馏/创建固定流程（元技能，单事实源）
         ├── SKILL.md
-        ├── metadata.json
-        └── templates/                           # project_rules.md 与 docs/ 骨架模板
+        └── metadata.json
 ```
 
 ## License

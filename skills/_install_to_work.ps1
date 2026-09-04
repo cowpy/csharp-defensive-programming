@@ -12,7 +12,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repoSkills = 'C:\AI-Skills\github\csharp-defensive-programming\skills'
-$skills     = @('lhg-dev-thinking', 'lhg-dev-doc')
+$skills     = @('lhg-dev-thinking', 'lhg-dev-doc', 'lhg-skill-new')
 $models     = @('default', 'deidamia', 'hebe', 'iphigenia', 'metis', 'thetis')
 
 # 三类链接落点：
