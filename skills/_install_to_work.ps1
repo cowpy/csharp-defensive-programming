@@ -24,8 +24,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$repoSkills = 'C:\AI-Skills\github\csharp-defensive-programming\skills'
-$skills     = @('lhg-dev-thinking', 'lhg-dev-doc', 'lhg-skill-new')
+$repoSkills  = 'C:\AI-Skills\github\csharp-defensive-programming\skills'
+$skills      = @('lhg-dev-thinking', 'lhg-dev-doc', 'lhg-skill-new')
+# 备份区必须在 IDE 技能扫描范围之外：留在技能根目录内的 *.backup-* 会被 IDE 索引成同名重复技能
+# （2026-09-04 实测：TRAE 调用技能时从 .trae-cn\skills\<技能>.backup-* 加载，而非从 Junction 加载）
+$backupRoot  = 'C:\AI-Skills\_backups'
 
 # 固定主落点（TRAE 主界面读取链 + 全局技能目录）
 $mainRoots = @(
@@ -42,10 +45,11 @@ if (Test-Path $workBase) {
 
 function Get-LinkStatus {
     param([string]$Path, [string]$Target)
-    if (-not (Test-Path $Path)) { return 'MISSING' }
-    $item = Get-Item $Path -Force
+    # 用 Get-Item 而非 Test-Path 判存在：断链 Junction（目标已删）Test-Path 返回 false，会误判成 MISSING
+    $item = Get-Item $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return 'MISSING' }
     if ($item.LinkType -eq 'Junction' -and ($item.Target -join ';') -eq $Target) { return 'OK' }
-    if ($item.LinkType -eq 'Junction') { return 'WRONG-TARGET' }
+    if ($item.LinkType) { return 'WRONG-TARGET' }
     return 'FORK'   # 实体目录：内容独立于仓库，分叉隐患
 }
 
@@ -54,15 +58,26 @@ function New-SkillJunction {
 
     $status = Get-LinkStatus -Path $Path -Target $Target
     if ($status -eq 'OK') { return 'skip' }
-    if (Test-Path $Path) {
-        # 实体目录或指向别处的链接：先备份再替换，防止内容丢失
-        $backup = "$Path.backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-        Rename-Item -Path $Path -NewName (Split-Path $backup -Leaf)
+    $note = ''
+    $item = Get-Item $Path -Force -ErrorAction SilentlyContinue
+    if ($item -and $item.LinkType) {
+        # 旧链接本身不含内容，备份无意义（备份了反而会留下跟随仓库内容变化的"幽灵技能"）；
+        # [IO.Directory]::Delete($Path, $false) 只删 reparse point，绝不动链接目标
+        [IO.Directory]::Delete($Path, $false)
+        $note = ', old link removed'
+    } elseif ($item) {
+        # 实体目录可能含独有内容：移到 IDE 扫描范围之外的备份区，禁止留在技能根目录内
+        if (-not (Test-Path $backupRoot)) { New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null }
+        $dest = Join-Path $backupRoot ("{0}.backup-{1}" -f (Split-Path $Path -Leaf), (Get-Date -Format 'yyyyMMdd-HHmmss'))
+        $i = 2
+        while (Test-Path $dest) { $dest = Join-Path $backupRoot ("{0}.backup-{1}-{2}" -f (Split-Path $Path -Leaf), (Get-Date -Format 'yyyyMMdd-HHmmss'), $i); $i++ }
+        Move-Item -Path $Path -Destination $dest
+        $note = ", entity moved to $dest"
     }
     $parent = Split-Path $Path -Parent
     if (-not (Test-Path $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
     New-Item -ItemType Junction -Path $Path -Target $Target -Force | Out-Null
-    return "linked(was $status)"
+    return "linked(was $status$note)"
 }
 
 $allTargets = @()
@@ -101,9 +116,19 @@ if (-not $VerifyOnly) {
     exit $LASTEXITCODE
 }
 
+# STRAY 扫描：备份残留（*.backup-*）留在技能扫描根内会被 IDE 索引成重复技能
+foreach ($t in $allTargets) {
+    Get-ChildItem $t.Root -Force -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -like '*.backup-*' } |
+        ForEach-Object {
+            Write-Host "  [STRAY] $($_.FullName)  -- 备份残留在技能扫描目录内，会被 IDE 索引成重复技能，请移走或删除"
+            $problems++
+        }
+}
+
 Write-Host ""
 if ($problems -gt 0) {
-    Write-Warning "发现 $problems 处异常（FORK=实体副本分叉 / MISS=未链接 / BAD=指向错误）。运行不带 -VerifyOnly 的安装命令修复。"
+    Write-Warning "发现 $problems 处异常（FORK=实体副本分叉 / MISS=未链接 / BAD=指向错误 / STRAY=备份残留被索引风险）。链接问题运行不带 -VerifyOnly 的安装命令修复；STRAY 需手工移出扫描目录。"
     exit 1
 }
 Write-Host "全部链接正常：所有位置均为 Junction -> git 仓库事实源。"

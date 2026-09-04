@@ -39,7 +39,15 @@ pwsh -ExecutionPolicy Bypass -File skills\_install_to_work.ps1
 
 > 注意：脚本含中文注释，请用 PowerShell 7（`pwsh`）运行；Windows PowerShell 5.1 按 GBK 解析会报语法错误。
 
-脚本会链接三类位置：`.trae-cn\skills\`（TRAE 主界面读取）、`.agents\skills\`（全局技能目录）、`.trae-cn\builtin\work\<model>\skills\`（各 work 模型）。已存在的实体目录会自动备份为 `*.backup-<时间戳>` 后替换，不会丢内容。
+脚本会链接三类位置：`.trae-cn\skills\`（TRAE 主界面读取）、`.agents\skills\`（全局技能目录）、`.trae-cn\builtin\work\<model>\skills\`（各 work 模型，自动枚举）。已存在的实体目录会移到扫描范围外的 `C:\AI-Skills\_backups\`（备份目录若留在技能根内会被 IDE 索引成同名重复技能，造成"改了不生效"），旧链接直接重建，不会丢内容。
+
+验证链接状态（TRAE 升级后或怀疑技能没生效时跑）：
+
+```powershell
+pwsh -ExecutionPolicy Bypass -File skills\_install_to_work.ps1 -VerifyOnly
+```
+
+报告 `[FORK]`=实体副本分叉、`[MISS]`=未链接、`[STRAY]`=备份残留；安装命令跑完也会自动验证一次。
 
 ## Install
 

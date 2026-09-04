@@ -30,7 +30,13 @@ pwsh -ExecutionPolicy Bypass -File skills\_install_to_work.ps1 -VerifyOnly
 
 - 安装命令跑完会**自动追加一次验证**，无需单独跑。
 - 主动跑漂移检查的时机：① 新建/更新技能后；② TRAE 升级后（可能新增 work 模型目录或重置技能目录）；③ 怀疑技能没生效/内容是旧版时。
-- 报告 `[FORK]` = 该位置是实体目录、内容独立于仓库（分叉事故，正是 lhg-dev-thinking 当年两套版本的根因）；不带参数重跑安装命令即可自动备份并修复。
+- 报告 `[FORK]` = 该位置是实体目录、内容独立于仓库（分叉事故，正是 lhg-dev-thinking 当年两套版本的根因）；`[STRAY]` = 技能扫描目录内残留 `*.backup-*` 目录；不带参数重跑安装命令可修复 FORK/MISS，STRAY 需手工移出扫描目录。
+
+## 备份规则（事故教训 2026-09-04）
+
+- **备份绝不能放在 IDE 技能扫描目录内**。旧脚本把被替换的目录原地改名为 `<技能名>.backup-<时间戳>` 留在 skills 根下——该目录**仍被 TRAE 索引成一个可加载技能**（frontmatter name 相同），会与正式技能形成同名重复；实测 TRAE 加载技能时优先命中了 backup 目录而非 Junction，导致"改了仓库但技能不生效"。
+- 现行规则：实体目录备份统一移到扫描范围外的 `C:\AI-Skills\_backups\`（脚本自动完成）；旧 Junction/符号链接本身不含内容，**不备份、直接删 reparse point**（`[IO.Directory]::Delete($path, $false)` 只删链接不碰目标），备份 Junction 会制造指向其他位置的"幽灵技能"。
+- 结论：备份目录放哪里本身就是"播种性决策"——带技能名前缀的任何实体目录出现在扫描根内，都会被 IDE 当作技能。
 
 ## 执行步骤（照做）
 
@@ -41,7 +47,7 @@ pwsh -ExecutionPolicy Bypass -File skills\_install_to_work.ps1 -VerifyOnly
    - SKILL.md 写法可参考 `skill-creator` 技能的通用建议，但**仓库布局与链接流程以本技能为准**，不按它的安装方式走。
 3. **建 `metadata.json`**：复制 `skills\lhg-dev-doc\metadata.json` 改 `name`/`description`/`keywords`/`categories`/`skill.triggers`/`skill.path`；`author.name` 固定 `LHG`，`license` 固定 `MIT`。
 4. **登记安装脚本**：把技能名追加到 `skills\_install_to_work.ps1` 的 `$skills` 数组。
-5. **跑安装脚本**（pwsh 7）：脚本对已存在的实体目录自动备份为 `*.backup-<时间戳>` 后替换，不丢内容；work 模型目录自动枚举。
+5. **跑安装脚本**（pwsh 7）：实体目录自动移到 `C:\AI-Skills\_backups\`（不在 IDE 扫描范围内），旧链接直接重建；work 模型目录自动枚举。
 6. **验证（脚本自动做，不靠肉眼假设）**：安装脚本结尾自动跑 `-VerifyOnly` 漂移检查，逐位置输出 `[OK]/[FORK]/[MISS]/[BAD]`；必须全部 `[OK]` 且退出码 0 才算完成，有异常不带参数重跑修复，再不行停下来报告用户。
 7. **更新 README.md**：技能清单加一条（编号顺延，中英各一句简介）+ Repository Structure 树补目录行。
 8. **git 提交**：仓库目录内 `git branch --show-current` + `git status` 确认 → add 新目录/`_install_to_work.ps1`/README.md → 一个 conventional commit（如 `feat: add lhg-xxx skill ...`）→ `git push` → `git log --oneline -3` 验证落在正确分支。push 失败（网络）要显眼提醒，不 silently 积压。
