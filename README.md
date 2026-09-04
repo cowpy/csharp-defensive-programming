@@ -14,6 +14,26 @@ A C#/.NET defensive programming methodology for AI coding agents. Distills the "
 
 > Comprehensive code complexity governance with hard thresholds, severity classification, and execution flow for AI coding assistants.
 
+### 3. lhg-dev-thinking
+LHG 个人开发思路蒸馏（59 条原则）：命名与领域表达、Webhook/开放平台架构、第三方接口请求构造、SP 编写规范、异步 Job 与状态机、播种性决策元原则等。从真实项目对话中沉淀，每条标注适用场景（通用 / 某平台特有）。
+
+> Personal development-principles skill distilled from project conversations: naming, webhook architecture, SP conventions, async job state machines, and "seeding decisions" meta-principles.
+
+### 4. lhg-dev-doc
+代码-文档双向同步体系（薄宪法 project_rules.md + docs/ 骨架）。提供 init / apply / check 三种工作模式：新项目初始化文档体系、任务中按加载链取文档并同步、提交前检查文档一致性。与 lhg-dev-thinking 互补：thinking 管怎么想，doc 管怎么记。
+
+> Code-documentation bidirectional sync system with a thin project-rules constitution and docs skeleton; init/apply/check modes.
+
+## 本地链接安装（个人技能，单事实源）
+
+`lhg-dev-thinking` 与 `lhg-dev-doc` 以本仓库为**唯一事实源**，通过 Junction 链接到各 IDE 技能目录，改仓库一处即全局生效：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File skills\_install_to_work.ps1
+```
+
+脚本会链接三类位置：`.trae-cn\skills\`（TRAE 主界面读取）、`.agents\skills\`（全局技能目录）、`.trae-cn\builtin\work\<model>\skills\`（各 work 模型）。已存在的实体目录会自动备份为 `*.backup-<时间戳>` 后替换，不会丢内容。
+
 ## Install
 
 ### Install All Skills
@@ -117,12 +137,20 @@ The skill triggers on:
 ├── LICENSE                                      # MIT
 ├── .gitignore
 └── skills/
+    ├── _install_to_work.ps1                     # Junction 安装脚本（个人技能单事实源链接）
     ├── csharp-defensive-programming/            # Defensive programming methodology
     │   ├── SKILL.md                             # Main skill content
     │   └── metadata.json                        # Skill metadata
-    └── code-complexity-governor/                # Code complexity governance
-        ├── SKILL.md                             # Main skill content
-        └── metadata.json                        # Skill metadata
+    ├── code-complexity-governor/                # Code complexity governance
+    │   ├── SKILL.md                             # Main skill content
+    │   └── metadata.json                        # Skill metadata
+    ├── lhg-dev-thinking/                        # LHG 开发思路蒸馏（个人，单事实源）
+    │   ├── SKILL.md
+    │   └── metadata.json
+    └── lhg-dev-doc/                             # LHG 文档宪法：代码-文档双向同步（个人，单事实源）
+        ├── SKILL.md
+        ├── metadata.json
+        └── templates/                           # project_rules.md 与 docs/ 骨架模板
 ```
 
 ## License

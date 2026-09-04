@@ -1,0 +1,37 @@
+{
+  "name": "lhg-dev-doc",
+  "version": "1.0.0",
+  "description": "LHG's code-documentation bidirectional sync system. Initialize the thin-constitution (project_rules.md + docs/ skeleton) on new projects, load docs by chain at task start, check doc sync before commit, and emit the document checklist at task wrap-up. Complements lhg-dev-thinking: thinking governs how to think; this skill governs how to record.",
+  "author": {
+    "name": "LHG"
+  },
+  "license": "MIT",
+  "keywords": [
+    "documentation",
+    "project-rules",
+    "docs-sync",
+    "change-management",
+    "knowledge-base",
+    "best-practices"
+  ],
+  "categories": [
+    "best-practices",
+    "documentation",
+    "project-specific"
+  ],
+  "languages": ["markdown", "csharp", "sql"],
+  "skill": {
+    "path": "skills/lhg-dev-doc/SKILL.md",
+    "priority": "high",
+    "triggers": [
+      "initialize documentation system",
+      "project rules",
+      "doc sync check",
+      "document constitution",
+      "docs skeleton",
+      "module document",
+      "change proposal",
+      "pre-commit check"
+    ]
+  }
+}
