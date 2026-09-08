@@ -6,19 +6,22 @@
 ## 1. 文档加载链（由总到细，省 token）
 
 1. 读本文件（规则）
-2. 读 `docs/01-directory-map.md`（代码↔文档↔职责 三列地图，~1 分钟）
-3. 按任务命中行，**只读**对应的 `docs/modules/<模块>.md`
-4. 任务涉及术语歧义时读 `docs/00-glossary.md`
-5. `docs/archive/` 是冷库，仅排查历史决策时人工翻，不主动加载
+2. 读 `docs/11-directory-map.md`（代码↔文档↔职责 三列地图）；目录导航见 `docs/00-README.md`
+3. 按任务命中行，**只读**对应的 `docs/70-modules/<模块>.md`
+4. 任务涉及术语歧义时读 `docs/10-glossary.md`
+5. `docs/90-archive/` 是冷库，仅排查历史决策时人工翻，不主动加载
+6. 「需求是什么 / 哪份接口文档最新」时读 `docs/30-requirements/README.md`（只读索引，不读二进制原件）
+7. `docs/40-analysis/` 是临时分析产物：只写不读；写完把结论细化进 module/change 后删除原文件
+8. `docs/99-personal/` 个人草稿默认不读，仅用户明确指定「分析 docs/99-personal/xxx」时才加载
 
 ## 2. 文档-代码同步铁律
 
 - 改了代码逻辑、接口签名、目录结构、状态机、SP/表结构 → **同一次提交内**同步更新对应 module 文档；代码与文档同一 commit。
 - 只改代码不改文档 = 违规；文档只增不减、过期堆积 = 违规（发现过时内容当场修正或删除）。
-- 模块文档**懒生成**：没有文档的模块，第一次改动时补建，并在 01-directory-map.md 加行。
+- 模块文档**懒生成**：没有文档的模块，第一次改动时补建，并在 11-directory-map.md 加行。
 - module 文档只写代码读不出来的东西：**职责边界、跨模块契约、状态机、决策原因、已知坑**。
   禁止抄字段清单/方法签名（代码里有，抄了必过期）。
-- 新增模块文档或代码目录 → 同步在 01-directory-map.md 加映射行。
+- 新增模块文档或代码目录 → 同步在 11-directory-map.md 加映射行。
 
 ## 3. 改动分级（决定要不要写 changes 方案）
 
@@ -30,13 +33,13 @@
 | 单模块内 bug 修复、文案、小调整 | 不需要 | 顺手更 |
 | 纯实验 Spike | 不进 docs，玩完删 | 不需要 |
 
-- 方案文件：`docs/changes/<yyyyMMdd>-<主题>.md`，模板见 `docs/changes/_template.md`。
+- 方案文件：`docs/80-changes/<yyyyMMdd>-<主题>.md`，模板见 `docs/80-changes/_template.md`。
 - 方案**先给人确认再写代码**（重大改动禁止直接动手）。
-- 完成后：把方案中的 delta 要点合并进对应 module 文档 → change 文件移入 `docs/archive/`。
+- 完成后：把方案中的 delta 要点合并进对应 module 文档 → change 文件移入 `docs/90-archive/`。
 
 ## 4. 文档行数预算（超了就拆）
 
-- 本文件 ≤ 120 行；00-glossary.md ≤ 100 行；单个 module 文档 ≤ 200 行。
+- 本文件 ≤ 120 行；10-glossary.md ≤ 100 行；单个 module 文档 ≤ 200 行。
 - module 文档超限：**按代码子目录拆**，拆分边界 = 代码目录边界 = 业务域边界。
 
 ## 5. 本项目关键技术约束（团队共识，AI 必须遵守）
