@@ -25,6 +25,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoSkills  = 'C:\AI-Skills\github\csharp-defensive-programming\skills'
+# 例外：trae-importer 也在本仓库内（仅作 git 版本管理、防丢失），
+# 但它只服务 WorkBuddy、不链到 Trae 各落点，故不列入本数组
 $skills      = @('lhg-dev-thinking', 'lhg-dev-doc', 'lhg-skill-new')
 # 备份区必须在 IDE 技能扫描范围之外：留在技能根目录内的 *.backup-* 会被 IDE 索引成同名重复技能
 # （2026-09-04 实测：TRAE 调用技能时从 .trae-cn\skills\<技能>.backup-* 加载，而非从 Junction 加载）
